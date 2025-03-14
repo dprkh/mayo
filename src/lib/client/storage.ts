@@ -1,13 +1,13 @@
 import type {
-  audio,
-} from "@/lib/server/types/audio";
+  read_audio,
+} from "@/actions/audio";
 
 export type storage_audio =
   //
   {
     audio:
       //
-      audio;
+      read_audio;
 
     time_created:
       //

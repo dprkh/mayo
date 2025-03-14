@@ -1,6 +1,6 @@
 import type {
-  audio,
-} from "@/lib/server/types/audio";
+  read_audio,
+} from "@/actions/audio";
 
 import {
   audio_thumbnail_sizes,
@@ -11,7 +11,7 @@ export type player_audio =
   {
     audio:
       //
-      audio;
+      read_audio;
 
     can_play:
       //

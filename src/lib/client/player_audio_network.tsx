@@ -1,10 +1,10 @@
+import type {
+  read_audio,
+} from "@/actions/audio";
+
 import {
   perms_can_remove,
 } from "@/lib/perms";
-
-import type {
-  audio,
-} from "@/lib/server/types/audio";
 
 import {
   audio_is_playable,
@@ -46,7 +46,7 @@ const into_player_audio =
     //
     batch:
       //
-      audio[],
+      read_audio[],
     //
     user?:
       //
@@ -162,7 +162,7 @@ const download_impl =
     //
     audio:
       //
-      audio,
+      read_audio,
   ) =>
     storage_connect()
       //

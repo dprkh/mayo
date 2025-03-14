@@ -19,6 +19,10 @@ import {
   z,
 } from "astro:schema";
 
+import {
+  s3,
+} from "bun";
+
 import type {
   ReadStream,
 } from "node:fs";
@@ -32,28 +36,6 @@ import {
 } from "node:fs/promises";
 
 import parseRange from "range-parser";
-
-// Helper function to convert Node.js ReadStream to Web ReadableStream
-//
-// TODO: switch to Bun API when fixed https://github.com/oven-sh/bun/issues/7057
-function nodeStreamToWebStream(nodeStream: ReadStream): ReadableStream {
-  return new ReadableStream({
-    start(controller) {
-      nodeStream.on("data", (chunk) => {
-        controller.enqueue(chunk);
-      });
-      nodeStream.on("end", () => {
-        controller.close();
-      });
-      nodeStream.on("error", (err) => {
-        controller.error(err);
-      });
-    },
-    cancel() {
-      nodeStream.destroy();
-    },
-  });
-}
 
 export const GET: APIRoute =
   //
@@ -100,6 +82,8 @@ export const GET: APIRoute =
         .query(`
           select
 
+            kind,
+
             processing,
 
             processing_state
@@ -113,13 +97,20 @@ export const GET: APIRoute =
             id = ?1;
         `)
         //
-        .get(params.id) as Pick<audio, "processing" | "processing_state"> | null;
+        .get(params.id) as
+          | Pick<
+            //
+            audio,
+            //
+            | "kind"
+            //
+            | "processing"
+            //
+            | "processing_state"
+          >
+          | null;
 
-    if (
-      audio === null
-      //
-      || audio_is_playable(audio) === false
-    ) {
+    if (audio === null || !audio_is_playable(audio)) {
       return new Response(
         //
         null,
@@ -132,48 +123,79 @@ export const GET: APIRoute =
       );
     }
 
-    const cache_visibility =
+    switch (audio.kind) {
+      case 0:
+        return serve_local_audio(request, params.id);
+
+      case 1:
+        return serve_remote_audio(params.id);
+
+      default:
+        throw new Error("unreachable");
+    }
+  };
+
+// Helper function to convert Node.js ReadStream to Web ReadableStream
+//
+// TODO: switch to Bun API when fixed https://github.com/oven-sh/bun/issues/7057
+function nodeStreamToWebStream(nodeStream: ReadStream): ReadableStream {
+  return new ReadableStream({
+    start(controller) {
+      nodeStream.on("data", (chunk) => {
+        controller.enqueue(chunk);
+      });
+      nodeStream.on("end", () => {
+        controller.close();
+      });
+      nodeStream.on("error", (err) => {
+        controller.error(err);
+      });
+    },
+    cancel() {
+      nodeStream.destroy();
+    },
+  });
+}
+
+async function serve_local_audio(
+  //
+  request:
+    //
+    Request,
+  //
+  id:
+    //
+    string,
+): Promise<Response> {
+  const cache_visibility =
+    //
+    Bun.env.MAYO_AUTHENTICATION === "required"
       //
-      Bun.env.MAYO_AUTHENTICATION === "required"
+      ? "private"
+      //
+      : "public";
+
+  const file_path =
+    //
+    audio_get_file_path_stream({ id });
+
+  const file_stat =
+    //
+    await stat(file_path);
+
+  const file_size =
+    //
+    file_stat.size;
+
+  const range_header =
+    //
+    request.headers.get("range");
+
+  if (range_header === null) {
+    return (
+      new Response(
         //
-        ? "private"
-        //
-        : "public";
-
-    const file_path =
-      //
-      audio_get_file_path_stream(
-        {
-          id:
-            //
-            params.id,
-        },
-      );
-
-    const file_stat =
-      //
-      await stat(file_path);
-
-    const file_size =
-      //
-      file_stat.size;
-
-    const range_header =
-      //
-      request.headers.get("range");
-
-    if (range_header === null) {
-      let stream =
-        //
-        createReadStream(
-          file_path,
-        );
-
-      return new Response(
-        //
-        nodeStreamToWebStream(
-          stream,
-        ),
+        nodeStreamToWebStream(createReadStream(file_path)),
         //
         {
           headers: {
@@ -194,22 +216,22 @@ export const GET: APIRoute =
               `${cache_visibility}, max-age=31536000, immutable`,
           },
         },
-      );
-    }
+      )
+    );
+  }
 
-    const ranges =
+  const ranges =
+    //
+    parseRange(
       //
-      parseRange(
-        //
-        file_size,
-        //
-        range_header,
-      );
+      file_size,
+      //
+      range_header,
+    );
 
-    if (
-      ranges === -1 || ranges === -2
-    ) {
-      return new Response(
+  if (ranges === -1 || ranges === -2) {
+    return (
+      new Response(
         //
         null,
         //
@@ -225,33 +247,35 @@ export const GET: APIRoute =
               `bytes */${file_size}`,
           },
         },
-      );
-    }
+      )
+    );
+  }
 
-    const {
-      start,
+  const {
+    start,
 
-      end,
-    } = ranges[0];
+    end,
+  } = ranges[0];
 
-    const length =
+  const length =
+    //
+    end - start + 1;
+
+  const stream =
+    //
+    createReadStream(
       //
-      end - start + 1;
-
-    const stream =
+      file_path,
       //
-      createReadStream(
-        //
-        file_path,
-        //
-        {
-          start,
+      {
+        start,
 
-          end,
-        },
-      );
+        end,
+      },
+    );
 
-    return new Response(
+  return (
+    new Response(
       //
       nodeStreamToWebStream(
         stream,
@@ -284,5 +308,10 @@ export const GET: APIRoute =
             `${cache_visibility}, max-age=31536000, immutable`,
         },
       },
-    );
-  };
+    )
+  );
+}
+
+function serve_remote_audio(id: string): Response {
+  return new Response(s3.file(`${id}.mp4`));
+}
