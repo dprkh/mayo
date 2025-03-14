@@ -7,10 +7,6 @@ import {
   id,
 } from "@/lib/server/schema/id";
 
-import type {
-  audio as audio_ty,
-} from "@/lib/server/types/audio";
-
 import {
   audio_get_directory_path,
   audio_get_file_path_original,
@@ -27,6 +23,41 @@ import {
 } from "astro:schema";
 
 import fs from "node:fs/promises";
+
+export type read_audio =
+  //
+  Pick<
+    //
+    import("@/lib/server/types/audio").audio,
+    //
+    | "id"
+    //
+    | "time_uploaded"
+    //
+    | "file_name"
+    //
+    | "processing"
+    //
+    | "processing_state"
+    //
+    | "has_thumbnail"
+    //
+    | "duration"
+    //
+    | "size"
+    //
+    | "album"
+    //
+    | "artist"
+    //
+    | "composer"
+    //
+    | "genre"
+    //
+    | "performer"
+    //
+    | "title"
+  >;
 
 export const audio =
   //
@@ -238,7 +269,7 @@ export const audio =
                     id = ?1
                 `)
                 //
-                .get(input) as audio_ty | null;
+                .get(input) as read_audio | null;
 
             return audio;
           },
@@ -387,7 +418,7 @@ export const audio =
                     limit,
                     //
                     offset,
-                  ) as audio_ty[];
+                  ) as read_audio[];
 
               return page;
             }
@@ -449,7 +480,7 @@ export const audio =
                   limit,
                   //
                   offset,
-                ) as audio_ty[];
+                ) as read_audio[];
 
             return page;
           },

@@ -19,6 +19,10 @@ import {
   z,
 } from "astro:schema";
 
+import {
+  s3,
+} from "bun";
+
 export const GET: APIRoute =
   //
   async ({
@@ -66,6 +70,8 @@ export const GET: APIRoute =
         .query(`
           select
 
+            kind,
+
             has_thumbnail
 
           from 
@@ -77,45 +83,65 @@ export const GET: APIRoute =
             id = ?1;
         `)
         //
-        .get(params.id) as Pick<audio, "has_thumbnail"> | null;
+        .get(params.id) as
+          | Pick<
+            //
+            audio,
+            //
+            | "kind"
+            //
+            | "has_thumbnail"
+          >
+          | null;
 
-    if (
-      audio?.has_thumbnail !== 1
-    ) {
-      return new Response(
-        //
-        null,
-        //
-        {
-          status: 404,
-        },
+    if (audio?.has_thumbnail !== 1) {
+      return (
+        new Response(
+          //
+          null,
+          //
+          {
+            status: 404,
+          },
+        )
       );
     }
 
-    const path =
-      //
-      audio_get_file_path_thumbnail(
-        //
-        {
-          id:
-            //
-            params.id,
-        },
-        //
-        params.size,
-      );
+    switch (audio.kind) {
+      case 0:
+        return serve_local_thumbnail(params.id, params.size);
 
-    const stream =
-      //
-      Bun
-        //
-        .file(path)
-        //
-        .stream();
+      case 1:
+        return serve_remote_thumbnail(params.id, params.size);
 
-    return new Response(
+      default:
+        throw new Error("unreachable");
+    }
+  };
+
+function serve_local_thumbnail(
+  //
+  id:
+    //
+    string,
+  //
+  size:
+    //
+    typeof audio_thumbnail_sizes[number],
+): Response {
+  const path =
+    //
+    audio_get_file_path_thumbnail(
       //
-      stream,
+      { id },
+      //
+      size,
+    );
+
+  return (
+    new Response(
+      //
+      Bun.file(path),
       //
       {
         headers:
@@ -130,5 +156,19 @@ export const GET: APIRoute =
               "public, max-age=31536000, immutable",
           },
       },
-    );
-  };
+    )
+  );
+}
+
+function serve_remote_thumbnail(
+  //
+  id:
+    //
+    string,
+  //
+  size:
+    //
+    typeof audio_thumbnail_sizes[number],
+): Response {
+  return new Response(s3.file(`${id}-${size}.avif`));
+}
