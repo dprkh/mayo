@@ -4,3 +4,4 @@ dist
 .mayo
 *.swp
 *.swo
+.env.local
