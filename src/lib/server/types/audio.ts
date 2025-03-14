@@ -15,6 +15,14 @@ export type audio =
       //
       string;
 
+    /*
+     * 0 - local
+     * 1 - remote
+     */
+    kind:
+      //
+      0 | 1;
+
     processing:
       //
       0 | 1;
